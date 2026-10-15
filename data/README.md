@@ -227,6 +227,8 @@ python job.py | jq 'select(.level != "INFO")'   # only warnings and errors
 **5. Look at the results.** Open [notebooks/insights.ipynb](./talent-pipeline/notebooks/insights.ipynb) in VS Code, pick the
 kernel **Python (talent-pipeline)** and use **Run All**. To look up one employee, go to section 8 and edit the
 two lines under `EDIT HERE` (`EMPLOYEE_ID = 1332`, or `SEARCH_NAME = "Davis"` to search by name).
+Both notebooks read LocalStack by default; to read the **AWS** lake from VS Code instead, run
+`./bin/setup-participant.sh` (fresh keys) and set `FORCE_LOCAL = False` in the first code cell's `EDIT HERE` block.
 
 To **see the lake itself** — what each layer looks like, the lineage diagram, row accounting, quarantine, one
 employee traced through every layer, and the run history — open
@@ -340,7 +342,7 @@ Upload `notebooks/insights.ipynb` (and/or `notebooks/lake_explorer.ipynb`) and *
 (JupyterHub sets `JUPYTERHUB_USER`) and looks up the bucket's region; if it can't tell which bucket to read, it says so
 — set `DATALAKE_BUCKET` in the *EDIT HERE* block of the first code cell (normally not needed: the deploy passes
 it to notebook servers). Tested in the JupyterHub image (pandas 2.0.3) against this deployment's real Gold data:
-all 8 charts, no errors. After a deploy that changes JupyterHub settings, stop and start your notebook server
+all 8 charts, no errors (and the lake explorer: all 6 — [TESTING.md §4.4](./TESTING.md)). After a deploy that changes JupyterHub settings, stop and start your notebook server
 (*File → Hub Control Panel → Stop My Server*) so it picks them up.
 
 **5. Clean up** (stops the charges):

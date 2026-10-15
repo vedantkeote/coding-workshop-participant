@@ -42,8 +42,8 @@ python ../data/talent-pipeline/job.py 2>&1 | tee /tmp/talent-pipeline.log
 | Largest volume tested | **20× (840 k records) in 23 s**, peak 1.55 GB |
 | Simulated EKS pod (1 CPU, 2 GiB, Python 3.11, same image) | **passed at 20×**, peak 1.50 GB |
 | Independent recomputation of Gold from raw files | **all match** |
-| Insights notebook executes against fresh Gold | **passes** locally (`test_notebook.py`) and in the JupyterHub image (pandas 2.0.3, pyarrow 13) |
-| Lake explorer notebook executes against a fresh lake | **passes** locally (`test_notebook.py`) and in the JupyterHub image |
+| Both notebooks execute against a fresh lake | **pass** (`test_notebook.py`: insights 8 charts, lake explorer 6) |
+| Both notebooks × {VS Code, JupyterHub image} × {LocalStack, AWS lake} | **8 / 8 pass**, AWS findings identical to local — see §4.4 |
 
 Tests per file: `test_foundation` 20 · `test_bronze` 20 · `test_silver` 47 · `test_gold` 25 ·
 `test_lineage` 9 · `test_resilience` 7 · `test_e2e` 5 · `test_notebook` 2.
@@ -142,6 +142,31 @@ of network round-trips to S3 and Aurora; preflight includes Aurora resuming from
 Getting there exposed four infrastructure issues, each fixed in `infra/` with approval (see README → Cloud
 Deployment): no environment variables reached the Helm job; the node role had no S3 access; pods couldn't reach
 Aurora (security groups); pods couldn't obtain credentials (IMDSv2 hop limit 1).
+
+### 4.4 Notebooks: local and AWS
+
+Both notebooks were executed end-to-end (every cell, `nbconvert --execute`) in every way they can be run, on
+2026-10-16. "VS Code" is the project's `.venv` kernel (pandas 3.0.6, pyarrow 24); "JupyterHub image" is the
+`jupyter/all-spark-notebook` image the cluster's notebook servers use (Python 3.11, pandas 2.0.3, pyarrow 13).
+
+| Notebook | VS Code + LocalStack | VS Code + AWS | JupyterHub image + LocalStack | JupyterHub image + AWS |
+|---|---|---|---|---|
+| `insights.ipynb` | ✅ 8 charts | ✅ 8 charts | ✅ 8 charts | ✅ 8 charts |
+| `lake_explorer.ipynb` | ✅ 6 charts | ✅ 6 charts | ✅ 6 charts | ✅ 6 charts |
+
+- **Same answers in both lakes:** every written finding in `insights.ipynb` is identical between the local and the
+  AWS run; the only differences are run ids, timestamps, step timings and the Python version recorded in the manifest.
+  In the AWS lake the explorer's live proofs also pass: Bronze file byte-for-byte equal to the AWS landing bucket,
+  quarantine row equal to its raw Bronze line, every dataset `read = valid + quarantined`.
+- **"JupyterHub + AWS"** is simulated: the image runs on the VDI with `JUPYTERHUB_USER` set (so cloud mode is
+  auto-detected) and the variables the deploy passes to notebook servers (`IS_LOCAL`, `AWS_REGION`,
+  `DATALAKE_BUCKET`), with the workshop credentials. On the real cluster the credentials come from the node role
+  instead, which needs the pending JupyterHub settings deploy (README → Cloud Deployment) — not yet run.
+- **Edited and failure paths** (all behave as intended): explorer §7 with a run manifest, raw event files, a filter
+  plus column list, and an unknown dataset (lists what exists); §8 with an unknown employee; insights lookup by ID
+  and by name; JupyterHub without the deploy's variables (stops with "Which data lake? Set DATALAKE_BUCKET…", and
+  works once the bucket is typed in — the region is looked up); AWS without credentials (stops with the credentials
+  hint and the underlying `ACCESS_DENIED`).
 
 ## 5. Coverage (guide §Test Coverage Goals)
 
