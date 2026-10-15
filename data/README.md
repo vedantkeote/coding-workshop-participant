@@ -331,19 +331,34 @@ aws s3 ls s3://coding-workshop-datalake-$PARTICIPANT_ID/gold/ --recursive
 aws s3 cp s3://coding-workshop-datalake-$PARTICIPANT_ID/_runs/latest.json -
 ```
 
-Optionally, run the notebook on the cluster's JupyterHub. Its proxy is internal to the cluster
-(`ClusterIP` in [infra/helm/config.yaml](../infra/helm/config.yaml)), so reach it through a port-forward:
+**Optional — open the notebooks on the cluster's JupyterHub.** There is **no public link**: the JupyterHub proxy
+is internal to the cluster (`ClusterIP` in [infra/helm/config.yaml](../infra/helm/config.yaml)), so you open a
+tunnel to it from the VDI:
 
 ```sh
-kubectl port-forward svc/proxy-public 8888:80     # then open http://localhost:8888 and log in (workshop LDAP account)
+./bin/setup-participant.sh                        # only if kubectl says Unauthorized / expired (keys are temporary)
+kubectl port-forward svc/proxy-public 8888:80     # leave this terminal open: "Forwarding from 127.0.0.1:8888"
 ```
 
-Upload `notebooks/insights.ipynb` (and/or `notebooks/lake_explorer.ipynb`) and **Run All**. On JupyterHub the notebooks switch to cloud mode by itself
-(JupyterHub sets `JUPYTERHUB_USER`) and looks up the bucket's region; if it can't tell which bucket to read, it says so
-— set `DATALAKE_BUCKET` in the *EDIT HERE* block of the first code cell (normally not needed: the deploy passes
-it to notebook servers). Tested in the JupyterHub image (pandas 2.0.3) against this deployment's real Gold data:
-all 8 charts, no errors (and the lake explorer: all 6 — [TESTING.md §4.4](./TESTING.md)). After a deploy that changes JupyterHub settings, stop and start your notebook server
-(*File → Hub Control Panel → Stop My Server*) so it picks them up.
+Then open **<http://localhost:8888>** in the VDI's browser and log in with your workshop (LDAP) account. Upload
+`notebooks/insights.ipynb` and/or `notebooks/lake_explorer.ipynb` and **Run All**. Press `Ctrl+C` in the
+port-forward terminal when you are done.
+
+- **No edits needed in the notebooks.** They detect JupyterHub (it sets `JUPYTERHUB_USER`) and switch to cloud mode;
+  the deploy gives notebook servers the lake settings and AWS access. If the bucket is ever unknown, the first cell
+  says so — set `DATALAKE_BUCKET` in its *EDIT HERE* block.
+- **Check what is deployed** (read-only): `helm get values jupyterhub` should list `extraEnv` with `DATALAKE_BUCKET`,
+  `AWS_REGION` and `IS_LOCAL: "false"`, `extraPodConfig.hostNetwork: true` and `cloudMetadata.blockWithIptables: false`.
+  Confirmed on 2026-10-16.
+- **Ignore the Terraform output `jupyter_url`** in the cloud: there it prints the Kubernetes API endpoint, not
+  JupyterHub (it is only right for local runs).
+- **Login:** on 2026-10-15 this account's login was rejected ("invalid password") — an environment issue to raise
+  with the organizers. It is not needed: the notebooks give the same results from VS Code against the AWS lake
+  (see [Local Development](#local-development), step 5).
+- **Tested** in the JupyterHub image (pandas 2.0.3) against this deployment's real lake: insights 8 charts, lake
+  explorer 6, no errors ([TESTING.md §4.4](./TESTING.md)).
+- After a deploy that changes JupyterHub settings, stop and start your notebook server
+  (*File → Hub Control Panel → Stop My Server*) so it picks them up.
 
 **5. Clean up** (stops the charges):
 
@@ -534,9 +549,9 @@ Full commands, results and conclusions: [TESTING.md](./TESTING.md).
 - **Records dated before hire** (~17 % of reviews and events) are unresolved until the meaning of `hire_date` is confirmed.
 - **Small project sample** — 33 projects across 27 of 100 teams, so Q6 can't establish a relationship.
 - **Memory** grows with event history (Silver is rebuilt in full); see [TESTING.md §4.1](./TESTING.md).
-- **JupyterHub not used** — its LDAP login fails for this account (an environment issue), and its settings change
-  (`infra/helm/config.yaml`) is committed but not deployed. Both notebooks run from VS Code against the AWS lake
-  instead, and were tested in the JupyterHub image ([TESTING.md §4.4](./TESTING.md)).
+- **JupyterHub not used** — its settings are deployed (lake settings, AWS access; checked 2026-10-16), but the LDAP
+  login rejected this account (an environment issue). Both notebooks run from VS Code against the AWS lake instead,
+  and were tested in the JupyterHub image ([TESTING.md §4.4](./TESTING.md)).
 - **S3 access comes from the EKS node role**, so every pod on the node shares the lake permissions — per-pod roles
   (Pod Identity) would be tighter, but aren't allowed for the participant role.
 - The dataset is synthetic.

@@ -160,7 +160,8 @@ Both notebooks were executed end-to-end (every cell, `nbconvert --execute`) in e
 - **"JupyterHub + AWS"** is simulated: the image runs on the VDI with `JUPYTERHUB_USER` set (so cloud mode is
   auto-detected) and the variables the deploy passes to notebook servers (`IS_LOCAL`, `AWS_REGION`,
   `DATALAKE_BUCKET`), with the workshop credentials. On the real cluster the credentials come from the node role
-  instead, which needs the pending JupyterHub settings deploy (README → Cloud Deployment) — not yet run.
+  instead. Those settings are deployed (`helm get values jupyterhub`, checked 2026-10-16); the notebooks have not
+  been run on the real JupyterHub because its login rejects this account (README → Cloud Deployment).
 - **Edited and failure paths** (all behave as intended): explorer §7 with a run manifest, raw event files, a filter
   plus column list, and an unknown dataset (lists what exists); §8 with an unknown employee; insights lookup by ID
   and by name; JupyterHub without the deploy's variables (stops with "Which data lake? Set DATALAKE_BUCKET…", and
@@ -214,4 +215,4 @@ Both notebooks were executed end-to-end (every cell, `nbconvert --execute`) in e
 - **Cloud**: the real AWS run succeeded and matched local on every data metric (§4.3), so IAM,
   Aurora TLS and EKS networking were exercised for real; both notebooks read the AWS lake (§4.4).
 - **Not covered**: pyarrow's own S3 retry strategy (configured, not fault-injected); the
-  notebooks on the real JupyterHub (login issue, settings deploy pending) — tested in its image instead.
+  notebooks on the real JupyterHub (settings deployed, but the login rejects this account) — tested in its image instead.
