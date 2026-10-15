@@ -1,0 +1,7 @@
+-r requirements.txt
+pytest==9.1.1
+pytest-cov==7.1.0
+# notebooks/insights.ipynb (local only; the cloud JupyterHub image ships its own)
+matplotlib==3.11.2
+ipykernel==7.4.0
+nbconvert==7.17.1

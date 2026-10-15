@@ -1,0 +1,9 @@
+numpy==2.4.6
+pandas==3.0.6
+pyarrow==24.0.0
+boto3==1.43.100
+psycopg2-binary==2.9.13
+# pandas' optional accelerators. Not imported by job.py, but the EKS image (jupyter/all-spark-notebook)
+# pre-installs NumPy-1 builds of both, which fail to load under NumPy 2 - pinning replaces them.
+numexpr==2.14.2
+bottleneck==1.6.0
