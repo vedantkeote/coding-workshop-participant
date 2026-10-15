@@ -767,7 +767,7 @@ def parse_jsonl(files: Iterable[tuple[str, bytes]]) -> tuple[pd.DataFrame, pd.Da
     quarantined record can be traced to the exact byte range it came from.
 
     Memory: values are collected column-by-column (one list per field) rather than one
-    dict per line - at 600k lines the per-row dicts alone cost ~1 GB (measured, TESTING.md).
+    dict per line - at 600k lines the per-row dicts alone cost ~1 GB (measured, data/TESTING.md).
     ``files`` may be a lazy iterator; each body is released once parsed.
     """
     columns: dict[str, list[Any]] = {}
@@ -1186,7 +1186,7 @@ def _silver_learning_events(ctx: RunContext, lake: Lake, employees: pd.DataFrame
 
     read = len(records) + len(malformed) + len(drifted_files)
     result = validate(records, LEARNING_EVENTS, [references("employee_id", "employees", employees["employee_id"])])
-    del records  # memory: at 20x volume each live copy of the events is ~300+ MB (TESTING.md)
+    del records  # memory: at 20x volume each live copy of the events is ~300+ MB (data/TESTING.md)
     v = result.valid.drop(columns=["_raw"])  # raw text is only needed for rejected rows
     event_date = v["event_ts"].dt.normalize().astype(DATE)
     before_hire = flag_before_hire(v["employee_id"], event_date, employees)
@@ -1347,7 +1347,7 @@ def gold_learning_summary(events: pd.DataFrame, dim: pd.DataFrame, as_of: date) 
     """Q4 - learning activity per employee (all employees, zeros where none).
 
     Deliberately no "completion rate": in this data most completions have no matching
-    enrollment, so a funnel ratio would be misleading (see README, limitations).
+    enrollment, so a funnel ratio would be misleading (see data/README.md, Known Limitations).
     """
     names = {"enrollment": "enrollments", "module_started": "modules_started",
              "module_completed": "modules_completed", "quiz_attempted": "quiz_attempts",
@@ -1617,7 +1617,7 @@ def dataset_lineage(settings: Settings) -> dict[str, list[str]]:
 
 
 def lineage_mermaid(settings: Settings) -> str:
-    """Render dataset lineage as a Mermaid flowchart (used in LINEAGE.md and the notebook)."""
+    """Render dataset lineage as a Mermaid flowchart (used in data/LINEAGE.md and the notebook)."""
     lineage = dataset_lineage(settings)
     nodes = sorted({n for target, inputs in lineage.items() for n in (target, *inputs)})
     ids = {n: f"n{i}" for i, n in enumerate(nodes)}

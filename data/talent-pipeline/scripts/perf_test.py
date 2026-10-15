@@ -35,7 +35,7 @@ ENDPOINT = "http://localhost.localstack.cloud:4566"
 PG = dict(host="localhost", port=5432, dbname="postgres", user="postgres", password="postgres123")
 OFFSET = 1_000_000          # id offset per copy (ids stay unique across copies)
 EVENT_OFFSET = 100_000_000  # event ids: EV + 10 digits, so copies k < 100 still fit
-SLA_SECONDS = 600           # agreed daily-batch window for this exercise (see TESTING.md)
+SLA_SECONDS = 600           # agreed daily-batch window for this exercise (see data/TESTING.md)
 EXPECTED_QUARANTINE = 294   # learning_events rejects in the reference dataset
 
 

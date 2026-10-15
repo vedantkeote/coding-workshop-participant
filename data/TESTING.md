@@ -1,11 +1,13 @@
 # talent-pipeline — Test Evidence
 
 Commands, results and conclusions for every test category in
-[docs/data-engineer.md](../../docs/data-engineer.md#testing-expectations).
+[docs/data-engineer.md](../docs/data-engineer.md#testing-expectations).
 All results below were produced locally (PostgreSQL 18 + LocalStack) on 2026-10-15;
 nothing was deployed to AWS.
 
 ## 1. How to run
+
+From the repository root:
 
 ```sh
 cd data/talent-pipeline
