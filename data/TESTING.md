@@ -212,6 +212,7 @@ Both notebooks were executed end-to-end (every cell, `nbconvert --execute`) in e
   process events incrementally (per month partition, carrying a set of seen `event_id`s
   for deduplication) or to raise the pod memory in `infra/helm/values.yaml` (an infra
   change, to be agreed first).
-- **Not covered**: pyarrow's own S3 retry strategy (configured, not fault-injected);
-  real AWS behaviour (IAM, Aurora TLS, EKS networking) — LocalStack and local Postgres
-  stand in until the cloud step.
+- **Cloud**: the real AWS run succeeded and matched local on every data metric (§4.3), so IAM,
+  Aurora TLS and EKS networking were exercised for real; both notebooks read the AWS lake (§4.4).
+- **Not covered**: pyarrow's own S3 retry strategy (configured, not fault-injected); the
+  notebooks on the real JupyterHub (login issue, settings deploy pending) — tested in its image instead.

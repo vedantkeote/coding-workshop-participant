@@ -519,7 +519,7 @@ Full commands, results and conclusions: [TESTING.md](./TESTING.md).
 | Decision | Why | Trade-off |
 |---|---|---|
 | **pandas, not Spark** | 14 MB of data; Spark's start-up and scheduling would cost more than the processing. The guide recommends Python/pandas | Single machine; the job's memory grows with event history (safe up to ~25× today's volume in the 2 GiB pod) |
-| **One `job.py` file** | The cloud deploy ships only `job.py` | A long file — kept navigable with eight numbered sections |
+| **One `job.py` file** | The cloud deploy ships only `job.py` + `requirements.txt`, so a separate utility module would not reach the cluster | A long file — kept navigable with eight numbered sections. The shared helpers the guide asks to reuse (database connection, S3 I/O, schema contracts, logging, retry) are self-contained sections, ready to move into a shared module once a second job exists and the Helm chart can ship it |
 | **Parquet, without Iceberg/Delta** | Typed, compressed, columnar; partition overwrite makes reruns duplicate-free | No table transactions or time travel; not needed at this size |
 | **Silver rebuilt in full each run** | Simplest way to be always correct and idempotent; ~4 s | Cost grows with total history; at scale, process only new Bronze files |
 | **Quarantine instead of drop** | Bad data stays inspectable; counts reconcile | Quarantine needs periodic review |
@@ -534,7 +534,11 @@ Full commands, results and conclusions: [TESTING.md](./TESTING.md).
 - **Records dated before hire** (~17 % of reviews and events) are unresolved until the meaning of `hire_date` is confirmed.
 - **Small project sample** — 33 projects across 27 of 100 teams, so Q6 can't establish a relationship.
 - **Memory** grows with event history (Silver is rebuilt in full); see [TESTING.md §4.1](./TESTING.md).
-- **Not yet tested against real AWS** (IAM, Aurora TLS, EKS networking) — LocalStack and local PostgreSQL stand in.
+- **JupyterHub not used** — its LDAP login fails for this account (an environment issue), and its settings change
+  (`infra/helm/config.yaml`) is committed but not deployed. Both notebooks run from VS Code against the AWS lake
+  instead, and were tested in the JupyterHub image ([TESTING.md §4.4](./TESTING.md)).
+- **S3 access comes from the EKS node role**, so every pod on the node shares the lake permissions — per-pod roles
+  (Pod Identity) would be tighter, but aren't allowed for the participant role.
 - The dataset is synthetic.
 
 ## Troubleshooting
