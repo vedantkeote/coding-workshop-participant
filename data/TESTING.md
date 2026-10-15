@@ -18,7 +18,7 @@ python3 -m venv .venv && .venv/bin/pip install -r requirements-dev.txt
 # every session: LocalStack keeps data in memory, so re-seed after a restart
 localstack start -d && ./scripts/seed_sources.sh
 
-.venv/bin/pytest -q                                   # all 134 tests (~55 s, needs Postgres + LocalStack)
+.venv/bin/pytest -q                                   # all 135 tests (~55 s, needs Postgres + LocalStack)
 .venv/bin/pytest -q -m "not integration"              # 103 pure unit tests (~5 s, no services needed)
 .venv/bin/pytest --cov=job --cov-report=json:.pytest_cache/coverage.json -q \
   && .venv/bin/python scripts/coverage_by_area.py .pytest_cache/coverage.json   # vs guide targets
@@ -36,16 +36,17 @@ python ../data/talent-pipeline/job.py 2>&1 | tee /tmp/talent-pipeline.log
 
 | Check | Result |
 |---|---|
-| Test suite | **134 passed** (103 unit + 31 integration/end-to-end) |
+| Test suite | **135 passed** (103 unit + 32 integration/end-to-end) |
 | Coverage, whole `job.py` | **97.3 %** |
 | Coverage targets (4 areas) | **all met** — see §5 |
 | Largest volume tested | **20× (840 k records) in 23 s**, peak 1.55 GB |
 | Simulated EKS pod (1 CPU, 2 GiB, Python 3.11, same image) | **passed at 20×**, peak 1.50 GB |
 | Independent recomputation of Gold from raw files | **all match** |
 | Insights notebook executes against fresh Gold | **passes** locally (`test_notebook.py`) and in the JupyterHub image (pandas 2.0.3, pyarrow 13) |
+| Lake explorer notebook executes against a fresh lake | **passes** locally (`test_notebook.py`) and in the JupyterHub image |
 
 Tests per file: `test_foundation` 20 · `test_bronze` 20 · `test_silver` 47 · `test_gold` 25 ·
-`test_lineage` 9 · `test_resilience` 7 · `test_e2e` 5 · `test_notebook` 1.
+`test_lineage` 9 · `test_resilience` 7 · `test_e2e` 5 · `test_notebook` 2.
 
 ## 3. Functional testing (guide §Functional Testing)
 

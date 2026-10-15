@@ -25,9 +25,9 @@ training records live in different systems. This pipeline brings them together a
 | | |
 |---|---|
 | Sources | PostgreSQL (7 HR tables) + S3 landing bucket (783 daily JSONL files of learning events) |
-| Output | 7 Gold tables in S3 (Parquet), a run manifest per run, the insights notebook |
+| Output | 7 Gold tables in S3 (Parquet), a run manifest per run, two notebooks (business insights + lake explorer) |
 | Runtime (local, full dataset) | ~8 seconds end-to-end, ~650 MB peak memory |
-| Tests | 134 tests, 97 % line coverage, all four coverage targets from the guide met |
+| Tests | 135 tests, 97 % line coverage, all four coverage targets from the guide met |
 | Status | ✅ runs locally (LocalStack + PostgreSQL) · ✅ runs in AWS on EKS (run `20261015T085735Z-0e8677b4`, results identical to local) — see [Cloud Deployment](#cloud-deployment) |
 
 Related documents:
@@ -35,6 +35,7 @@ Related documents:
 - [LINEAGE.md](./LINEAGE.md) — source-to-target mapping: every column, rename, cast and aggregation
 - [TESTING.md](./TESTING.md) — test evidence: commands, results, performance, coverage, bugs found
 - [notebooks/insights.ipynb](./talent-pipeline/notebooks/insights.ipynb) — the business answers, with charts
+- [notebooks/lake_explorer.ipynb](./talent-pipeline/notebooks/lake_explorer.ipynb) — a visual tour of the lake itself: every layer, lineage, quarantine, runs
 
 ## Architecture
 
@@ -103,14 +104,15 @@ coding-workshop-participant/
 │       ├── requirements-dev.txt         # Test + notebook dependencies — local only
 │       ├── pytest.ini                   # Test configuration
 │       ├── notebooks/
-│       │   └── insights.ipynb           # Business answers with charts (reads Gold)
+│       │   ├── insights.ipynb           # Business answers with charts (reads Gold)
+│       │   └── lake_explorer.ipynb      # Visual tour of Bronze/Silver/quarantine/Gold, lineage and runs
 │       ├── scripts/
 │       │   ├── seed_sources.sh          # Loads the source systems (PostgreSQL + S3 landing)
 │       │   ├── seed_aws_sources.sh      # Loads the source systems in AWS (S3 landing + Aurora, via the cluster)
 │       │   ├── inspect_lake.py          # Read-only viewer: show any Bronze/Silver/Gold dataset (local or cloud)
 │       │   ├── perf_test.py             # Performance tests at 1×, 5×, 20× volume
 │       │   └── coverage_by_area.py      # Coverage per guide area vs targets
-│       └── tests/                       # 134 tests (unit, integration, end-to-end, notebook)
+│       └── tests/                       # 135 tests (unit, integration, end-to-end, notebook)
 │           ├── conftest.py              #   shared fixtures (throwaway S3 buckets)
 │           ├── test_foundation.py       #   config, logging, retries, I/O
 │           ├── test_bronze.py           #   ingestion
@@ -226,7 +228,12 @@ python job.py | jq 'select(.level != "INFO")'   # only warnings and errors
 kernel **Python (talent-pipeline)** and use **Run All**. To look up one employee, go to section 8 and edit the
 two lines under `EDIT HERE` (`EMPLOYEE_ID = 1332`, or `SEARCH_NAME = "Davis"` to search by name).
 
-To **show any layer's data** (Bronze, Silver, Gold, quarantine, run manifests), use the read-only viewer —
+To **see the lake itself** — what each layer looks like, the lineage diagram, row accounting, quarantine, one
+employee traced through every layer, and the run history — open
+[notebooks/lake_explorer.ipynb](./talent-pipeline/notebooks/lake_explorer.ipynb) the same way and **Run All**. Its
+section 7 browses any dataset (edit `DATASET` / `FILTERS` under `EDIT HERE`); section 8 follows one employee.
+
+From a terminal, to **show any layer's data** (Bronze, Silver, Gold, quarantine, run manifests), use the read-only viewer —
 it prints where the dataset lives, its row count, columns with types, and the first rows:
 
 ```sh
@@ -250,7 +257,7 @@ aws --endpoint-url http://localhost.localstack.cloud:4566 s3 ls s3://coding-work
 
 ```sh
 cd ~/coding-workshop-participant/data/talent-pipeline
-.venv/bin/pytest -q                              # all 134 tests, ~55 s (needs steps 1-2)
+.venv/bin/pytest -q                              # all 135 tests, ~55 s (needs steps 1-2)
 .venv/bin/pytest -q -m "not integration"         # 103 unit tests, ~5 s (no services needed)
 .venv/bin/python scripts/perf_test.py --scales 1 5 20   # performance tests (local only)
 ```
@@ -329,7 +336,7 @@ Optionally, run the notebook on the cluster's JupyterHub. Its proxy is internal 
 kubectl port-forward svc/proxy-public 8888:80     # then open http://localhost:8888 and log in (workshop LDAP account)
 ```
 
-Upload `notebooks/insights.ipynb` and **Run All**. On JupyterHub the notebook switches to cloud mode by itself
+Upload `notebooks/insights.ipynb` (and/or `notebooks/lake_explorer.ipynb`) and **Run All**. On JupyterHub the notebooks switch to cloud mode by itself
 (JupyterHub sets `JUPYTERHUB_USER`) and looks up the bucket's region; if it can't tell which bucket to read, it says so
 — set `DATALAKE_BUCKET` in the *EDIT HERE* block of the first code cell (normally not needed: the deploy passes
 it to notebook servers). Tested in the JupyterHub image (pandas 2.0.3) against this deployment's real Gold data:
@@ -493,7 +500,7 @@ In total 294 of 29,868 learning-event lines (1 %) are quarantined; all 12,173 Po
 
 ## Testing
 
-134 tests cover every testing expectation in the [Data Engineer Guide](../docs/data-engineer.md#testing-expectations):
+135 tests cover every testing expectation in the [Data Engineer Guide](../docs/data-engineer.md#testing-expectations):
 
 | Guide expectation | Where |
 |---|---|

@@ -1,8 +1,8 @@
-"""The insights notebook must run end-to-end against the Gold layer the pipeline produces.
+"""Both notebooks must run end-to-end against the lake the pipeline produces.
 
-Guards the contract between Gold and its main consumer: rename a Gold column and this
-fails here, not in front of a stakeholder. Builds a fresh lake via main(), then executes
-every notebook cell with nbclient.
+Guards the contract between the lake and its readers: rename a Gold column (insights) or a
+lineage column / manifest field (lake explorer) and this fails here, not in front of a
+stakeholder. Builds a fresh lake via main(), then executes every notebook cell with nbclient.
 """
 
 import logging
@@ -18,7 +18,7 @@ import job
 
 pytestmark = pytest.mark.integration
 
-NOTEBOOK = Path(__file__).resolve().parents[1] / "notebooks" / "insights.ipynb"
+NOTEBOOKS = Path(__file__).resolve().parents[1] / "notebooks"
 
 
 @pytest.fixture(scope="module")
@@ -45,14 +45,18 @@ def lake_bucket():
         lake.s3.delete_bucket(Bucket=bucket)
 
 
-def test_notebook_executes_without_errors(lake_bucket, monkeypatch):
+@pytest.mark.parametrize(("notebook", "charts"), [
+    ("insights.ipynb", 8),        # 7 questions + anomalies
+    ("lake_explorer.ipynb", 6),   # inventory, lineage, raw files, Silver events, quarantine, runs
+])
+def test_notebook_executes_without_errors(lake_bucket, monkeypatch, notebook, charts):
     monkeypatch.setenv("IS_LOCAL", "true")
     monkeypatch.setenv("DATALAKE_BUCKET", lake_bucket)  # the kernel inherits this environment
-    nb = nbformat.read(NOTEBOOK, as_version=4)
-    NotebookClient(nb, timeout=300, kernel_name="python3", resources={"metadata": {"path": str(NOTEBOOK.parent)}}).execute()
+    nb = nbformat.read(NOTEBOOKS / notebook, as_version=4)
+    NotebookClient(nb, timeout=300, kernel_name="python3", resources={"metadata": {"path": str(NOTEBOOKS)}}).execute()
 
     outputs = [o for c in nb.cells if c.cell_type == "code" for o in c.outputs]
     assert not [o for o in outputs if o.get("output_type") == "error"]
-    assert sum("image/png" in o.get("data", {}) for o in outputs) == 8  # 7 questions + anomalies
+    assert sum("image/png" in o.get("data", {}) for o in outputs) == charts
     freshness = next(o["data"]["text/markdown"] for o in outputs if "text/markdown" in o.get("data", {}))
     assert lake_bucket in freshness  # it read the lake we pointed it at
