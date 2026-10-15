@@ -11,6 +11,8 @@ Usage (from data/talent-pipeline/, with the virtual environment):
     .venv/bin/python scripts/inspect_lake.py quarantine/learning_events --rows 10
     .venv/bin/python scripts/inspect_lake.py bronze/learning_activity   # raw JSONL lines
     .venv/bin/python scripts/inspect_lake.py _runs/latest.json          # a run manifest pointer
+    .venv/bin/python scripts/inspect_lake.py gold/employee_performance_history --where employee_id=1332
+    .venv/bin/python scripts/inspect_lake.py silver/employees --columns employee_id,first_name,hire_date
 
 Cloud mode uses your workshop credentials (written by ./bin/setup-participant.sh); they are temporary,
 so re-run that script if you see "expired".
@@ -86,7 +88,8 @@ def show_list(s3, fs, bucket: str) -> None:
         print(f"{name:42} {len(files):>6} {rows if parquet else '-':>9} {size / 1024:>8.0f}K")
 
 
-def show_dataset(s3, fs, bucket: str, dataset: str, rows: int) -> None:
+def show_dataset(s3, fs, bucket: str, dataset: str, rows: int, where: list[str] | None = None,
+                 columns: str | None = None) -> None:
     dataset = dataset.strip("/")
     files = list_files(s3, bucket, dataset if dataset.endswith((".json", ".jsonl")) else dataset + "/")
     if not files:
@@ -115,9 +118,22 @@ def show_dataset(s3, fs, bucket: str, dataset: str, rows: int) -> None:
     folders = sorted({f["Key"][len(dataset) + 1:].rsplit("/", 1)[0] for f in files if "=" in f["Key"]})
     if folders:
         print(f"\npartitions ({len(folders)}): {', '.join(folders[:5])}{' ...' if len(folders) > 5 else ''}")
+    df = table.to_pandas()
+    for condition in where or []:                      # e.g. employee_id=1332 (compared as text)
+        col, _, value = condition.partition("=")
+        if col not in df.columns:
+            sys.exit(f"--where: no column {col!r}. Columns: {', '.join(df.columns)}")
+        df = df[df[col].astype(str) == value]
+    if columns:
+        wanted = [c.strip() for c in columns.split(",") if c.strip()]
+        missing = [c for c in wanted if c not in df.columns]
+        if missing:
+            sys.exit(f"--columns: unknown {missing}. Columns: {', '.join(df.columns)}")
+        df = df[wanted]
+    label = f"{len(df):,} row(s) matching {' and '.join(where)}" if where else f"first {rows} row(s)"
     with pd.option_context("display.max_columns", None, "display.width", 220, "display.max_colwidth", 40):
-        print(f"\nfirst {rows} row(s):")
-        print(table.slice(0, rows).to_pandas().to_string(index=False))
+        print(f"\n{label}{' (showing ' + str(rows) + ')' if where and len(df) > rows else ''}:")
+        print(df.head(rows).to_string(index=False) if len(df) else "  (none)")
 
 
 def main() -> int:
@@ -126,6 +142,9 @@ def main() -> int:
     parser.add_argument("--cloud", action="store_true", help="read the lake in real AWS instead of LocalStack")
     parser.add_argument("--rows", type=int, default=5, help="rows to show (default 5)")
     parser.add_argument("--list", action="store_true", help="list every dataset with file and row counts")
+    parser.add_argument("--where", action="append", metavar="COLUMN=VALUE",
+                        help="only rows where COLUMN equals VALUE (repeatable), e.g. --where employee_id=1332")
+    parser.add_argument("--columns", metavar="A,B,...", help="only show these columns")
     args = parser.parse_args()
     if not args.list and not args.dataset:
         parser.error("give a dataset (e.g. silver/employees) or --list")
@@ -136,7 +155,7 @@ def main() -> int:
         if args.list:
             show_list(s3, fs, bucket)
         else:
-            show_dataset(s3, fs, bucket, args.dataset, args.rows)
+            show_dataset(s3, fs, bucket, args.dataset, args.rows, args.where, args.columns)
     except NoCredentialsError:
         sys.exit("No AWS credentials. Run ./bin/setup-participant.sh (cloud) - or drop --cloud for LocalStack.")
     except ClientError as exc:

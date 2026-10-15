@@ -34,6 +34,7 @@ Related documents in this folder:
 - [LINEAGE.md](./LINEAGE.md) — source-to-target mapping: every column, rename, cast and aggregation
 - [TESTING.md](./TESTING.md) — test evidence: commands, results, performance, coverage, bugs found
 - [notebooks/insights.ipynb](./notebooks/insights.ipynb) — the business answers, with charts
+- [DEMO.md](./DEMO.md) — demo playbook: what to run and say for each likely evaluation question
 
 ## Architecture
 
