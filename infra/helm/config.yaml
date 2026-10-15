@@ -36,6 +36,15 @@ singleuser:
     extraVolumeMounts:
       - name: scratch-volume
         mountPath: /var/run/jupyter
+  # Notebook servers read the data lake with the node role's credentials. The nodes enforce IMDSv2
+  # with hop limit 1, so (like the data job) they must use the node's network.
+  extraPodConfig:
+    hostNetwork: true
+    dnsPolicy: ClusterFirstWithHostNet
+  # The default metadata block is an iptables rule set by a privileged init container; with
+  # hostNetwork it would land in the NODE's firewall and cut off IMDS for the whole node.
+  cloudMetadata:
+    blockWithIptables: false
 
 scheduling:
   userScheduler:

@@ -1,3 +1,24 @@
+locals {
+  # Settings passed to data jobs (helm_python_job). Database values come from the same
+  # local.env_vars the backend Lambdas use; the password is passed separately as a secret.
+  job_env_vars = {
+    IS_LOCAL        = local.env_vars["IS_LOCAL"]
+    AWS_REGION      = data.aws_region.this.region
+    POSTGRES_HOST   = local.env_vars["POSTGRES_HOST"]
+    POSTGRES_PORT   = local.env_vars["POSTGRES_PORT"]
+    POSTGRES_NAME   = local.env_vars["POSTGRES_NAME"]
+    POSTGRES_USER   = local.env_vars["POSTGRES_USER"]
+    LANDING_BUCKET  = format("%s-landing-%s", var.aws_project, local.app_id)
+    DATALAKE_BUCKET = format("%s-datalake-%s", var.aws_project, local.app_id)
+  }
+  # Settings for JupyterHub notebook servers, so the insights notebook reads the cloud lake as-is.
+  notebook_env_vars = {
+    IS_LOCAL        = local.job_env_vars["IS_LOCAL"]
+    AWS_REGION      = local.job_env_vars["AWS_REGION"]
+    DATALAKE_BUCKET = local.job_env_vars["DATALAKE_BUCKET"]
+  }
+}
+
 resource "aws_eks_cluster" "this" {
   count    = data.aws_caller_identity.this.id != "000000000000" && var.aws_eks_enabled ? 1 : 0
   name     = format("%s-%s", var.aws_project, local.app_id)
@@ -46,9 +67,10 @@ resource "null_resource" "helm_chart" {
   count = data.aws_caller_identity.this.id != "000000000000" && var.aws_eks_enabled ? 1 : 0
 
   triggers = {
-    cluster_id  = one(aws_eks_node_group.this.*.id)
-    source_hash = local.helm_hash
-    aws_ds_ip   = var.aws_ds_ip
+    cluster_id   = one(aws_eks_node_group.this.*.id)
+    source_hash  = local.helm_hash
+    aws_ds_ip    = var.aws_ds_ip
+    notebook_env = jsonencode(local.notebook_env_vars) # re-install when the notebook settings change
   }
 
   provisioner "local-exec" {
@@ -61,9 +83,46 @@ resource "null_resource" "helm_chart" {
         --set proxy.secretToken="${sha256(random_pet.this.id)}" \
         --set hub.config.LDAPAuthenticator.server_address="${var.aws_ds_ip}" \
         --set-string "hub.config.LDAPAuthenticator.allowed_groups[0]=CN=${local.app_id}\,OU=Users\,OU=CORP\,DC=corp\,DC=codingworkshop\,DC=net" \
+%{for key, value in local.notebook_env_vars~}
+        --set-string singleuser.extraEnv.${key}="${value}" \
+%{endfor~}
         --namespace default --values ./helm/config.yaml
     EOT
   }
+}
+
+# Data jobs run as the node role, which only has the standard EKS policies. Grant least-privilege
+# S3 access to the two data-lake buckets: read the landing (source) bucket, read/write the lake.
+# (Pod Identity would scope this per pod, but the participant role can't create associations.)
+resource "aws_iam_role_policy" "eks_data_jobs_s3" {
+  count = data.aws_caller_identity.this.id != "000000000000" && var.aws_eks_enabled ? 1 : 0
+  name  = format("%s-eks-data-jobs-s3-%s", var.aws_project, local.app_id)
+  role  = element(split("/", local.eks_role_arn), length(split("/", local.eks_role_arn)) - 1)
+
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Sid    = "ReadLandingBucket"
+        Effect = "Allow"
+        Action = ["s3:ListBucket", "s3:GetBucketLocation", "s3:GetObject"]
+        Resource = [
+          format("arn:%s:s3:::%s", data.aws_partition.this.partition, local.job_env_vars["LANDING_BUCKET"]),
+          format("arn:%s:s3:::%s/*", data.aws_partition.this.partition, local.job_env_vars["LANDING_BUCKET"]),
+        ]
+      },
+      {
+        Sid    = "ReadWriteDataLake"
+        Effect = "Allow"
+        Action = ["s3:ListBucket", "s3:GetBucketLocation", "s3:CreateBucket", "s3:GetObject", "s3:PutObject",
+        "s3:DeleteObject"]
+        Resource = [
+          format("arn:%s:s3:::%s", data.aws_partition.this.partition, local.job_env_vars["DATALAKE_BUCKET"]),
+          format("arn:%s:s3:::%s/*", data.aws_partition.this.partition, local.job_env_vars["DATALAKE_BUCKET"]),
+        ]
+      },
+    ]
+  })
 }
 
 resource "null_resource" "helm_python_job" {
@@ -75,16 +134,28 @@ resource "null_resource" "helm_python_job" {
   }
 
   provisioner "local-exec" {
+    # The password is passed through the environment, so it never appears in the command text.
+    environment = {
+      JOB_POSTGRES_PASS = local.env_vars["POSTGRES_PASS"]
+    }
+    # Data jobs get the same database settings as the backend Lambdas (local.env_vars),
+    # plus the AWS region and the data-lake bucket names. hostNetwork=true: the nodes enforce
+    # IMDSv2 with hop limit 1, so only host-network pods can fetch the node role's credentials.
     command = <<-EOT
       helm upgrade --cleanup-on-fail \
         --install ${replace(each.key, "_", "-")}-python-job ./helm/ \
         --set pythonJob.enabled=true \
         --set pythonJob.name=${replace(each.key, "_", "-")} \
+        --set pythonJob.hostNetwork=true \
         --set-file pythonJob.scriptContent=${each.value.path}/${each.value.file} \
         --set-file pythonJob.requirementsContent=${each.value.path}/${each.value.reqs} \
+%{for key, value in local.job_env_vars~}
+        --set-string pythonJob.env.${key}="${value}" \
+%{endfor~}
+        --set-string pythonJob.secretEnv.POSTGRES_PASS="$JOB_POSTGRES_PASS" \
         --namespace default
     EOT
   }
 
-  depends_on = [null_resource.helm_chart]
+  depends_on = [null_resource.helm_chart, aws_iam_role_policy.eks_data_jobs_s3]
 }

@@ -19,8 +19,15 @@ resource "aws_rds_cluster" "this" {
   skip_final_snapshot             = true
   storage_encrypted               = true
   db_subnet_group_name            = element(aws_db_subnet_group.this.*.name, count.index)
-  vpc_security_group_ids          = data.aws_security_groups.this.ids
   enabled_cloudwatch_logs_exports = ["postgresql"]
+
+  # Also join the EKS-created cluster security group (when EKS is enabled): its built-in rule allows
+  # all traffic between members, so pods on the worker nodes can reach Aurora on 5432. The
+  # participant role can't add security-group rules, but it may change Aurora's groups.
+  vpc_security_group_ids = concat(
+    data.aws_security_groups.this.ids,
+    [for c in aws_eks_cluster.this : c.vpc_config[0].cluster_security_group_id],
+  )
 
   serverlessv2_scaling_configuration {
     max_capacity = 4.0
