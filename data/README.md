@@ -322,6 +322,11 @@ kubectl logs -f job/coding-workshop-talent-pipeline
 ```
 
 Success looks the same as locally: JSON log lines ending in `"msg": "run finished", … "status": "succeeded"`.
+
+Kubernetes deletes a finished job — and its logs — **100 seconds** after it ends (`ttlSecondsAfterFinished: 100`
+in the workshop's [infra/helm/values.yaml](../infra/helm/values.yaml)), so `kubectl logs` only works while it runs or
+just after. The permanent record is the run manifest in S3: `aws s3 cp s3://coding-workshop-datalake-$PARTICIPANT_ID/_runs/latest.json -`
+(or `scripts/inspect_lake.py _runs --cloud`).
 Check the job: `kubectl get jobs` (COMPLETIONS `1/1`).
 
 **4. Check the output in S3:**
