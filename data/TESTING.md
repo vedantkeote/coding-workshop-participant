@@ -161,8 +161,10 @@ Both notebooks were executed end-to-end (every cell, `nbconvert --execute`) in e
   auto-detected) and the variables the deploy passes to notebook servers (`IS_LOCAL`, `AWS_REGION`,
   `DATALAKE_BUCKET`), with the workshop credentials. On the real cluster the credentials come from the node role
   instead. Those settings are deployed (`helm get values jupyterhub`, checked 2026-10-16); the notebooks have not
-  been run on the real JupyterHub yet: it rejected this account (`User 'u77a23259' not allowed` — password accepted,
-  account not in the participant's LDAP group). The allow-list fix in `infra/eks.tf` takes effect on the next deploy.
+  been run on the real JupyterHub yet. First it rejected this account (`User 'u77a23259' not allowed` — password
+  accepted, account not in the participant's LDAP group): fixed in `infra/eks.tf`, deployed, login confirmed. Then
+  starting the notebook server failed (`2Gi is not a valid memory specification`): fixed in `infra/helm/config.yaml`
+  (`2G` = the same 2 GiB in JupyterHub's units, checked with the hub's validator), pending the next deploy.
 - **Edited and failure paths** (all behave as intended): explorer §7 with a run manifest, raw event files, a filter
   plus column list, and an unknown dataset (lists what exists); §8 with an unknown employee; insights lookup by ID
   and by name; JupyterHub without the deploy's variables (stops with "Which data lake? Set DATALAKE_BUCKET…", and
@@ -216,4 +218,4 @@ Both notebooks were executed end-to-end (every cell, `nbconvert --execute`) in e
 - **Cloud**: the real AWS run succeeded and matched local on every data metric (§4.3), so IAM,
   Aurora TLS and EKS networking were exercised for real; both notebooks read the AWS lake (§4.4).
 - **Not covered**: pyarrow's own S3 retry strategy (configured, not fault-injected); the
-  notebooks on the real JupyterHub (settings deployed; login fixed in `infra/eks.tf`, pending the next deploy) — tested in its image instead.
+  notebooks on the real JupyterHub (login fixed and deployed; notebook-server memory units fixed, pending the next deploy) — tested in its image instead.

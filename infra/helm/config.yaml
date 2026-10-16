@@ -25,9 +25,9 @@ singleuser:
   cpu:
     limit: 2
     guarantee: 1
-  memory:
-    limit: 2Gi
-    guarantee: 1Gi
+  memory:  # JupyterHub syntax: K/M/G/T are already binary (G = 1024^3), and it rejects "Gi"
+    limit: 2G
+    guarantee: 1G
   storage:
     type: "none"
     extraVolumes:

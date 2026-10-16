@@ -288,6 +288,7 @@ The workshop deploys a data job as a Kubernetes job on Amazon EKS
 | The pod got `NoCredentialsError`: nodes enforce IMDSv2 with **hop limit 1**, so pods can't fetch the node role's credentials from the instance metadata service (the node group has no launch template; per-pod IAM isn't allowed for the participant role) | The data-job pod runs with `hostNetwork: true` (+ `dnsPolicy: ClusterFirstWithHostNet`), putting it 0 hops from the metadata service. No extra permissions: it gets exactly the node role's | [infra/helm/templates/python-job.yaml](../infra/helm/templates/python-job.yaml), [infra/eks.tf](../infra/eks.tf) |
 | JupyterHub notebook servers would hit the same two walls: no lake settings, and no credentials (IMDS hop limit 1 — plus JupyterHub's own default **firewall block of the metadata service**, which with host networking would land on the *node's* firewall and cut off the whole node) | Notebook servers get `IS_LOCAL`, `AWS_REGION`, `DATALAKE_BUCKET`, host networking, and `cloudMetadata.blockWithIptables: false`. Trade-off: notebook users get the node role's permissions — acceptable here because only your participant group can log in; one notebook server per node (port 8888 on the host) | [infra/helm/config.yaml](../infra/helm/config.yaml), [infra/eks.tf](../infra/eks.tf) |
 | JupyterHub said **"invalid username or password"** for a correct password: its log showed `User 'u77a23259' not allowed` — the hub only admits members of the participant's LDAP group (`allowed_groups`), and this account isn't one | Also admit `u<participant id>` via `hub.config.Authenticator.allowed_users` (the authenticator allows a user who is in that list **or** in the group, so the group rule is unchanged); a Terraform trigger re-installs JupyterHub when the list changes | [infra/eks.tf](../infra/eks.tf) |
+| After logging in, JupyterHub returned **500** for every user: `TraitError: 2Gi is not a valid memory specification` — the workshop's `singleuser.memory` used Kubernetes units (`2Gi`), but KubeSpawner only accepts K/M/G/T | `limit: 2G`, `guarantee: 1G` — the same 2 GiB / 1 GiB, because JupyterHub's `G` is already 1024³ (checked with the hub's own validator). Only the placeholder pod, which Kubernetes reads in decimal, reserves ~7 % less | [infra/helm/config.yaml](../infra/helm/config.yaml) |
 | Aurora starts **empty** and is not reachable from the VDI | [scripts/seed_aws_sources.sh](./talent-pipeline/scripts/seed_aws_sources.sh) loads the source data from **inside** the cluster | — |
 
 #### Step-by-step
@@ -558,10 +559,10 @@ Full commands, results and conclusions: [TESTING.md](./TESTING.md).
 - **Records dated before hire** (~17 % of reviews and events) are unresolved until the meaning of `hire_date` is confirmed.
 - **Small project sample** — 33 projects across 27 of 100 teams, so Q6 can't establish a relationship.
 - **Memory** grows with event history (Silver is rebuilt in full); see [TESTING.md §4.1](./TESTING.md).
-- **JupyterHub login needs the allow-list deploy** — the hub rejected this account although its password was
-  accepted: the account isn't in the participant's LDAP group. `infra/eks.tf` now also admits `u<participant id>`
-  (verified by rendering the chart, effective after the next deploy). Until then the notebooks run from VS Code
-  against the AWS lake, and were tested in the JupyterHub image ([TESTING.md §4.4](./TESTING.md)).
+- **JupyterHub** — login works since the allow-list deploy (2026-10-16: `User logged in: u77a23259`); starting a
+  notebook server then failed on the workshop's memory units (`2Gi`), fixed in `infra/helm/config.yaml` and
+  effective after the next deploy. Until then the notebooks run from VS Code against the AWS lake, and were tested in
+  the JupyterHub image ([TESTING.md §4.4](./TESTING.md)).
 - **S3 access comes from the EKS node role**, so every pod on the node shares the lake permissions — per-pod roles
   (Pod Identity) would be tighter, but aren't allowed for the participant role.
 - The dataset is synthetic.
