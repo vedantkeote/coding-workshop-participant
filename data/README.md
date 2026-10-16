@@ -287,6 +287,7 @@ The workshop deploys a data job as a Kubernetes job on Amazon EKS
 | Pods couldn't **reach Aurora**: worker nodes sit in the EKS-created cluster security group, while Aurora only accepted traffic from its own `coding-workshop-<id>` group (connections hung). The participant role may not add security-group rules | Aurora also joins the EKS cluster security group (when EKS is enabled), whose built-in rule allows all traffic between its members — in-place change, no restart | [infra/rds.tf](../infra/rds.tf) |
 | The pod got `NoCredentialsError`: nodes enforce IMDSv2 with **hop limit 1**, so pods can't fetch the node role's credentials from the instance metadata service (the node group has no launch template; per-pod IAM isn't allowed for the participant role) | The data-job pod runs with `hostNetwork: true` (+ `dnsPolicy: ClusterFirstWithHostNet`), putting it 0 hops from the metadata service. No extra permissions: it gets exactly the node role's | [infra/helm/templates/python-job.yaml](../infra/helm/templates/python-job.yaml), [infra/eks.tf](../infra/eks.tf) |
 | JupyterHub notebook servers would hit the same two walls: no lake settings, and no credentials (IMDS hop limit 1 — plus JupyterHub's own default **firewall block of the metadata service**, which with host networking would land on the *node's* firewall and cut off the whole node) | Notebook servers get `IS_LOCAL`, `AWS_REGION`, `DATALAKE_BUCKET`, host networking, and `cloudMetadata.blockWithIptables: false`. Trade-off: notebook users get the node role's permissions — acceptable here because only your participant group can log in; one notebook server per node (port 8888 on the host) | [infra/helm/config.yaml](../infra/helm/config.yaml), [infra/eks.tf](../infra/eks.tf) |
+| JupyterHub said **"invalid username or password"** for a correct password: its log showed `User 'u77a23259' not allowed` — the hub only admits members of the participant's LDAP group (`allowed_groups`), and this account isn't one | Also admit `u<participant id>` via `hub.config.Authenticator.allowed_users` (the authenticator allows a user who is in that list **or** in the group, so the group rule is unchanged); a Terraform trigger re-installs JupyterHub when the list changes | [infra/eks.tf](../infra/eks.tf) |
 | Aurora starts **empty** and is not reachable from the VDI | [scripts/seed_aws_sources.sh](./talent-pipeline/scripts/seed_aws_sources.sh) loads the source data from **inside** the cluster | — |
 
 #### Step-by-step
@@ -357,9 +358,12 @@ port-forward terminal when you are done.
   Confirmed on 2026-10-16.
 - **Ignore the Terraform output `jupyter_url`** in the cloud: there it prints the Kubernetes API endpoint, not
   JupyterHub (it is only right for local runs).
-- **Login:** on 2026-10-15 this account's login was rejected ("invalid password") — an environment issue to raise
-  with the organizers. It is not needed: the notebooks give the same results from VS Code against the AWS lake
-  (see [Local Development](#local-development), step 5).
+- **Login:** username `u<participant id>` (e.g. `u77a23259`) and your workshop password. JupyterHub admits members of
+  the participant's LDAP group **or** the users in `local.jupyterhub_allowed_users` ([infra/eks.tf](../infra/eks.tf)).
+  If the browser says "invalid username or password" although the password is right, read the hub's log:
+  `kubectl logs deploy/hub | grep -i "not allowed"` — `User '…' not allowed` means the password was accepted but the
+  account is in neither list. JupyterHub is optional: the notebooks give the same results from VS Code against the
+  AWS lake (see [Local Development](#local-development), step 5).
 - **Tested** in the JupyterHub image (pandas 2.0.3) against this deployment's real lake: insights 8 charts, lake
   explorer 6, no errors ([TESTING.md §4.4](./TESTING.md)).
 - After a deploy that changes JupyterHub settings, stop and start your notebook server
@@ -554,9 +558,10 @@ Full commands, results and conclusions: [TESTING.md](./TESTING.md).
 - **Records dated before hire** (~17 % of reviews and events) are unresolved until the meaning of `hire_date` is confirmed.
 - **Small project sample** — 33 projects across 27 of 100 teams, so Q6 can't establish a relationship.
 - **Memory** grows with event history (Silver is rebuilt in full); see [TESTING.md §4.1](./TESTING.md).
-- **JupyterHub not used** — its settings are deployed (lake settings, AWS access; checked 2026-10-16), but the LDAP
-  login rejected this account (an environment issue). Both notebooks run from VS Code against the AWS lake instead,
-  and were tested in the JupyterHub image ([TESTING.md §4.4](./TESTING.md)).
+- **JupyterHub login needs the allow-list deploy** — the hub rejected this account although its password was
+  accepted: the account isn't in the participant's LDAP group. `infra/eks.tf` now also admits `u<participant id>`
+  (verified by rendering the chart, effective after the next deploy). Until then the notebooks run from VS Code
+  against the AWS lake, and were tested in the JupyterHub image ([TESTING.md §4.4](./TESTING.md)).
 - **S3 access comes from the EKS node role**, so every pod on the node shares the lake permissions — per-pod roles
   (Pod Identity) would be tighter, but aren't allowed for the participant role.
 - The dataset is synthetic.

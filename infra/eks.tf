@@ -17,6 +17,10 @@ locals {
     AWS_REGION      = local.job_env_vars["AWS_REGION"]
     DATALAKE_BUCKET = local.job_env_vars["DATALAKE_BUCKET"]
   }
+  # JupyterHub admits members of the participant's LDAP group (allowed_groups below) OR these users.
+  # Workshop usernames are "u" + participant id (e.g. u77a23259); the account was not in the group,
+  # so the hub logged "User '...' not allowed" although its LDAP password check succeeded.
+  jupyterhub_allowed_users = [format("u%s", local.app_id)]
 }
 
 resource "aws_eks_cluster" "this" {
@@ -67,10 +71,11 @@ resource "null_resource" "helm_chart" {
   count = data.aws_caller_identity.this.id != "000000000000" && var.aws_eks_enabled ? 1 : 0
 
   triggers = {
-    cluster_id   = one(aws_eks_node_group.this.*.id)
-    source_hash  = local.helm_hash
-    aws_ds_ip    = var.aws_ds_ip
-    notebook_env = jsonencode(local.notebook_env_vars) # re-install when the notebook settings change
+    cluster_id    = one(aws_eks_node_group.this.*.id)
+    source_hash   = local.helm_hash
+    aws_ds_ip     = var.aws_ds_ip
+    notebook_env  = jsonencode(local.notebook_env_vars) # re-install when the notebook settings change
+    allowed_users = join(",", local.jupyterhub_allowed_users)
   }
 
   provisioner "local-exec" {
@@ -83,6 +88,9 @@ resource "null_resource" "helm_chart" {
         --set proxy.secretToken="${sha256(random_pet.this.id)}" \
         --set hub.config.LDAPAuthenticator.server_address="${var.aws_ds_ip}" \
         --set-string "hub.config.LDAPAuthenticator.allowed_groups[0]=CN=${local.app_id}\,OU=Users\,OU=CORP\,DC=corp\,DC=codingworkshop\,DC=net" \
+%{for i, user in local.jupyterhub_allowed_users~}
+        --set-string "hub.config.Authenticator.allowed_users[${i}]=${user}" \
+%{endfor~}
 %{for key, value in local.notebook_env_vars~}
         --set-string singleuser.extraEnv.${key}="${value}" \
 %{endfor~}
